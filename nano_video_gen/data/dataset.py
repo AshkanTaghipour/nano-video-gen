@@ -17,10 +17,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
 
-try:
-    import imageio.v3 as iio
-except ImportError:
-    import imageio as iio
+import imageio
 
 
 class VideoDataset(Dataset):
@@ -92,13 +89,9 @@ class VideoDataset(Dataset):
 
     def _load_video(self, path: str) -> torch.Tensor:
         """Load video, resize, sample frames, normalize to [-1, 1]."""
-        try:
-            frames = iio.imread(path, plugin="pyav")
-        except Exception:
-            # Fallback for different imageio versions
-            reader = iio.get_reader(path)
-            frames = np.stack([frame for frame in reader])
-            reader.close()
+        reader = imageio.get_reader(path)
+        frames = np.stack([frame for frame in reader])
+        reader.close()
 
         # frames shape: (T, H, W, C)
         total_frames = len(frames)

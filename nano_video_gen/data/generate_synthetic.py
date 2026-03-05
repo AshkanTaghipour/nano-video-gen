@@ -14,10 +14,7 @@ import csv
 import numpy as np
 from PIL import Image, ImageDraw
 
-try:
-    import imageio.v3 as iio
-except ImportError:
-    import imageio as iio
+import imageio
 
 
 def generate_moving_circle(
@@ -197,8 +194,8 @@ def generate_dataset(
             filepath = os.path.join(output_dir, filename)
 
             # Save as MP4
-            writer = iio.get_writer(filepath, fps=8, codec='libx264',
-                                     pixelformat='yuv420p')
+            writer = imageio.get_writer(filepath, fps=8, codec='libx264',
+                                         pixelformat='yuv420p')
             for frame in video:
                 writer.append_data(frame)
             writer.close()
