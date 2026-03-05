@@ -250,17 +250,28 @@ def visualize_latent_space(
     latents = latents.detach().cpu().float()
 
     n_channels = latents.shape[0]
-    # Show first temporal frame for each channel
-    fig, axes = plt.subplots(1, n_channels, figsize=figsize)
-    if n_channels == 1:
-        axes = [axes]
+    # Use 2-row grid for many channels (e.g. 16), single row for few (e.g. 4)
+    if n_channels > 8:
+        ncols = (n_channels + 1) // 2
+        nrows = 2
+        if figsize == (12, 3):
+            figsize = (max(12, ncols * 1.5), 6)
+    else:
+        ncols = n_channels
+        nrows = 1
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+    axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
 
     for c in range(n_channels):
         img = latents[c, 0]  # First frame
-        im = axes[c].imshow(img.numpy(), cmap='coolwarm', aspect='equal')
-        axes[c].set_title(f'Channel {c}')
-        axes[c].axis('off')
-        plt.colorbar(im, ax=axes[c], fraction=0.046, pad=0.04)
+        im = axes_flat[c].imshow(img.numpy(), cmap='coolwarm', aspect='equal')
+        axes_flat[c].set_title(f'Ch {c}', fontsize=9)
+        axes_flat[c].axis('off')
+
+    # Hide unused axes
+    for c in range(n_channels, len(axes_flat)):
+        axes_flat[c].axis('off')
 
     fig.suptitle(title, fontsize=14)
     plt.tight_layout()
