@@ -3,3 +3,5 @@ from .attention import SelfAttention, CrossAttention
 from .dit_block import DiTBlock
 from .nano_dit import NanoDiT
 from .nano_vae import DummyVAE
+from .wan_vae_wrapper import WanVAEWrapper
+from .t5_text_encoder import T5TextEncoder, CachedTextEmbeddings
