@@ -62,13 +62,21 @@ python -m nano_video_gen.data.generate_synthetic
 #### 3. Train
 
 ```bash
+# Educational mode (DummyVAE + learned text embeddings, ~1.5M params)
 python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50
+
+# Real model mode (Wan 2.1 VAE + T5 text encoder, ~2.0M params)
+python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50 --use_real_models
 ```
 
 #### 4. Generate
 
 ```bash
+# Educational mode
 python scripts/generate.py --checkpoint outputs/checkpoint_final.pt --num_samples 4
+
+# Real model mode (auto-detected from checkpoint, or use --use_real_models)
+python scripts/generate.py --checkpoint outputs/checkpoint_final.pt --num_samples 4 --use_real_models
 ```
 
 #### 5. Explore Notebooks
@@ -102,7 +110,9 @@ nano-video-gen/
 │   │   ├── attention.py           # Self-attention, cross-attention
 │   │   ├── dit_block.py           # DiT block (self-attn + cross-attn + FFN + modulation)
 │   │   ├── nano_dit.py            # Full NanoDiT model
-│   │   └── nano_vae.py            # Simplified video VAE
+│   │   ├── nano_vae.py            # Simplified video VAE (educational)
+│   │   ├── wan_vae_wrapper.py     # Pretrained Wan 2.1 VAE wrapper
+│   │   └── t5_text_encoder.py     # T5 text encoder + cached embeddings
 │   ├── diffusion/
 │   │   └── flow_match.py          # Flow matching scheduler + training loss
 │   ├── data/
@@ -118,11 +128,30 @@ nano-video-gen/
 └── outputs/                       # Generated samples and checkpoints
 ```
 
+## Real Model Mode (`--use_real_models`)
+
+The `--use_real_models` flag swaps in the **pretrained Wan 2.1 VAE** and **umt5-xxl T5 text encoder** while keeping the tiny NanoDiT. This gives a model that operates on real latent representations and real text embeddings -- capable of overfitting on a few videos and producing recognizable output.
+
+| Component | Educational | Real Models |
+|-----------|------------|-------------|
+| VAE | DummyVAE (4 ch, Conv3d) | Wan 2.1 VAE (16 ch, CausalConv3d) |
+| Text encoder | Learned embeddings (64-dim) | T5 umt5-xxl (4096-dim) |
+| Resolution | 64x64, 16 frames | 128x128, 17 frames |
+| NanoDiT params | ~1.5M | ~2.0M |
+| Pretrained download | None | ~9.5 GB to `./pretrained_models/Wan2.1/` |
+
+Key details:
+- VAE and T5 are **pretrained and frozen** -- only NanoDiT trains
+- VAE runs on **CPU** to save GPU VRAM
+- T5 embeddings are **pre-computed once** and cached (T5 is ~9 GB, freed after encoding)
+- Weights download to `./pretrained_models/Wan2.1/` (not HuggingFace cache)
+
 ## Prerequisites
 
 - Python 3.10+
 - PyTorch 2.0+ with CUDA support (CPU works but is slow)
-- ~2GB GPU memory (model is tiny)
+- ~2GB GPU memory for educational mode
+- ~4GB GPU memory + ~16GB RAM for real model mode (VAE and T5 run on CPU)
 
 ## Pipeline Overview
 
