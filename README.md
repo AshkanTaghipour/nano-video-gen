@@ -4,7 +4,7 @@
 
 A standalone, educational codebase that teaches the concepts behind modern video diffusion models (Wan 2.1/2.2 architecture) with minimal code.
 
-Every architectural concept from Wan 14B is preserved in a ~1.5M parameter "nano" model that you can train on a single GPU in under an hour.
+Every architectural concept from Wan 14B is preserved in a ~2.0M parameter "nano" model that you can train on a single GPU in under an hour, using the **real pretrained Wan 2.1 VAE** and **T5 text encoder**.
 
 ## Architecture: Wan 14B vs Nano
 
@@ -14,13 +14,13 @@ Every architectural concept from Wan 14B is preserved in a ~1.5M parameter "nano
 | Attention heads | 40 | 12 | **4** |
 | Transformer layers | 40 | 30 | **2** |
 | FFN dim | 13824 | 8960 | **512** |
-| Latent channels | 16 | 16 | **4** |
-| Text dim | 4096 | 4096 | **64** |
+| Latent channels | 16 | 16 | **16** |
+| Text dim | 4096 | 4096 | **4096** |
 | Freq dim | 256 | 256 | **64** |
 | Patch size | [1,2,2] | [1,2,2] | **[1,2,2]** |
-| Parameters | ~14B | ~1.3B | **~1.5M** |
+| Parameters | ~14B | ~1.3B | **~2.0M** |
 
-Every layer type is preserved:
+The Nano model uses the **same pretrained VAE and T5 text encoder** as the full Wan models -- only the DiT is tiny. Every layer type is preserved:
 - Sinusoidal time embedding + MLP
 - Text embedding projection (Linear + GELU + Linear)
 - Time projection to 6 modulation params per block
@@ -62,21 +62,15 @@ python -m nano_video_gen.data.generate_synthetic
 #### 3. Train
 
 ```bash
-# Educational mode (DummyVAE + learned text embeddings, ~1.5M params)
 python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50
-
-# Real model mode (Wan 2.1 VAE + T5 text encoder, ~2.0M params)
-python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50 --use_real_models
 ```
+
+Pretrained Wan 2.1 VAE and T5 weights (~9.5 GB) are automatically downloaded to `./pretrained_models/Wan2.1/` on first run.
 
 #### 4. Generate
 
 ```bash
-# Educational mode
 python scripts/generate.py --checkpoint outputs/checkpoint_final.pt --num_samples 4
-
-# Real model mode (auto-detected from checkpoint, or use --use_real_models)
-python scripts/generate.py --checkpoint outputs/checkpoint_final.pt --num_samples 4 --use_real_models
 ```
 
 #### 5. Explore Notebooks
@@ -110,17 +104,17 @@ nano-video-gen/
 │   │   ├── attention.py           # Self-attention, cross-attention
 │   │   ├── dit_block.py           # DiT block (self-attn + cross-attn + FFN + modulation)
 │   │   ├── nano_dit.py            # Full NanoDiT model
-│   │   ├── nano_vae.py            # Simplified video VAE (educational)
+│   │   ├── nano_vae.py            # Simplified video VAE (used in educational notebooks 1-5)
 │   │   ├── wan_vae_wrapper.py     # Pretrained Wan 2.1 VAE wrapper
 │   │   └── t5_text_encoder.py     # T5 text encoder + cached embeddings
 │   ├── diffusion/
 │   │   └── flow_match.py          # Flow matching scheduler + training loss
 │   ├── data/
-│   │   ├── dataset.py             # Video dataset loader + simple text encoder
+│   │   ├── dataset.py             # Video dataset loader
 │   │   └── generate_synthetic.py  # Synthetic moving-shapes data generator
 │   └── visualization/
 │       └── viz.py                 # Attention maps, RoPE, denoising, loss curves
-├── notebooks/                     # 7 tutorial notebooks
+├── notebooks/                     # 7 tutorial notebooks + Colab all-in-one
 ├── scripts/
 │   ├── train.py                   # CLI training script
 │   ├── generate.py                # CLI inference script
@@ -128,42 +122,33 @@ nano-video-gen/
 └── outputs/                       # Generated samples and checkpoints
 ```
 
-## Real Model Mode (`--use_real_models`)
+## How It Works
 
-The `--use_real_models` flag swaps in the **pretrained Wan 2.1 VAE** and **umt5-xxl T5 text encoder** while keeping the tiny NanoDiT. This gives a model that operates on real latent representations and real text embeddings -- capable of overfitting on a few videos and producing recognizable output.
-
-| Component | Educational | Real Models |
-|-----------|------------|-------------|
-| VAE | DummyVAE (4 ch, Conv3d) | Wan 2.1 VAE (16 ch, CausalConv3d) |
-| Text encoder | Learned embeddings (64-dim) | T5 umt5-xxl (4096-dim) |
-| Resolution | 64x64, 16 frames | 128x128, 17 frames |
-| NanoDiT params | ~1.5M | ~2.0M |
-| Pretrained download | None | ~9.5 GB to `./pretrained_models/Wan2.1/` |
-
-Key details:
-- VAE and T5 are **pretrained and frozen** -- only NanoDiT trains
-- VAE runs on **CPU** to save GPU VRAM
-- T5 embeddings are **pre-computed once** and cached (T5 is ~9 GB, freed after encoding)
-- Weights download to `./pretrained_models/Wan2.1/` (not HuggingFace cache)
+- **VAE and T5 are pretrained and frozen** -- only the tiny NanoDiT (~2.0M params) trains
+- **VAE runs on CPU** to save GPU VRAM; handles CPU/GPU transfers transparently
+- **T5 embeddings are pre-computed once** at startup and cached (T5 model ~9 GB is freed after encoding)
+- **Weights download to `./pretrained_models/Wan2.1/`** (not HuggingFace cache)
+- **Resolution**: 128x128 pixels, 17 frames (Wan's `4k+1` format)
+- **Latent shape**: `[B, 16, 5, 16, 16]` (16 channels, 5 temporal frames, 16x16 spatial)
 
 ## Prerequisites
 
 - Python 3.10+
 - PyTorch 2.0+ with CUDA support (CPU works but is slow)
-- ~2GB GPU memory for educational mode
-- ~4GB GPU memory + ~16GB RAM for real model mode (VAE and T5 run on CPU)
+- ~4GB GPU memory + ~16GB RAM (VAE and T5 run on CPU)
+- ~10GB disk for pretrained weights (auto-downloaded on first run)
 
 ## Pipeline Overview
 
 ```
-Text Prompt ──→ [Text Encoder] ──→ text embeddings
-                                        │
-                                        ▼
-Random Noise ──→ [DiT Denoising Loop] ──→ denoised latent
+Text Prompt ──→ [T5 Text Encoder] ──→ text embeddings (4096-dim)
+                                           │
+                                           ▼
+Random Noise ──→ [NanoDiT Denoising Loop] ──→ denoised latent
                   ↑ timestep embedding
-                                        │
-                                        ▼
-                  [VAE Decoder] ──→ Generated Video
+                                           │
+                                           ▼
+                  [Wan 2.1 VAE Decoder] ──→ Generated Video
 ```
 
 ## Based On
