@@ -5,7 +5,7 @@ Uses pretrained Wan 2.1 VAE (16 channels, on CPU) and T5 text encoder
 (pre-computed embeddings, freed after encoding). Only NanoDiT trains.
 
 Usage:
-    python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50
+    python scripts/train.py --data_dir ./data/example_video_dataset --epochs 50
 """
 
 import os
@@ -28,7 +28,7 @@ from nano_video_gen.visualization.viz import plot_training_curves, save_video_gr
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train Nano DiT video generation model")
-    parser.add_argument("--data_dir", type=str, default="./data/synthetic_dataset",
+    parser.add_argument("--data_dir", type=str, default="./data/example_video_dataset",
                         help="Path to video dataset directory")
     parser.add_argument("--output_dir", type=str, default="./outputs",
                         help="Directory to save checkpoints and samples")
@@ -87,7 +87,7 @@ def main():
     dataset = VideoDataset(args.data_dir, height=128, width=128, num_frames=17)
     if len(dataset) == 0:
         print(f"No videos found in {args.data_dir}")
-        print("Generate synthetic data first: python -m nano_video_gen.data.generate_synthetic")
+        print("Download the dataset first: bash scripts/download_data.sh")
         return
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                             num_workers=0, drop_last=True)

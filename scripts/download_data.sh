@@ -5,17 +5,25 @@ set -e
 
 DATA_DIR="./data/example_video_dataset"
 
-echo "=== Downloading Example Video Dataset ==="
+echo "=== Downloading DiffSynth-Studio Example Video Dataset ==="
 echo ""
 
-# Check if modelscope CLI is available
-if ! command -v modelscope &> /dev/null; then
-    echo "modelscope CLI not found. Installing..."
-    pip install modelscope
+if [ -d "${DATA_DIR}" ]; then
+    echo "Dataset already exists at ${DATA_DIR}"
+    echo "To re-download, remove it first: rm -rf ${DATA_DIR}"
+    exit 0
 fi
 
-echo "Downloading dataset to ${DATA_DIR}..."
-modelscope download --dataset DiffSynth-Studio/example_video_dataset --local_dir "${DATA_DIR}"
+# Ensure git-lfs is available
+if ! command -v git-lfs &> /dev/null && ! git lfs version &> /dev/null 2>&1; then
+    echo "git-lfs not found. Please install it: https://git-lfs.github.com"
+    exit 1
+fi
+
+git lfs install
+
+echo "Cloning dataset to ${DATA_DIR} (~27 MB)..."
+git clone https://www.modelscope.cn/datasets/DiffSynth-Studio/example_video_dataset.git "${DATA_DIR}"
 
 echo ""
 echo "=== Download Complete ==="

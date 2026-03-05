@@ -49,12 +49,13 @@ conda activate ./.conda_envs/tut_vide_gen
 
 #### 2. Get Data
 
-**Option A:** Download DiffSynth-Studio example dataset
+**Option A: DiffSynth-Studio example video dataset (recommended)**
 ```bash
 bash scripts/download_data.sh
 ```
+Downloads real video clips with text captions (~27 MB) from [ModelScope](https://www.modelscope.cn/datasets/DiffSynth-Studio/example_video_dataset).
 
-**Option B:** Generate synthetic moving-shapes dataset
+**Option B: Generate synthetic moving-shapes dataset**
 ```bash
 python -m nano_video_gen.data.generate_synthetic
 ```
@@ -62,7 +63,7 @@ python -m nano_video_gen.data.generate_synthetic
 #### 3. Train
 
 ```bash
-python scripts/train.py --data_dir ./data/synthetic_dataset --epochs 50
+python scripts/train.py --data_dir ./data/example_video_dataset --epochs 50
 ```
 
 Pretrained Wan 2.1 VAE and T5 weights (~9.5 GB) are automatically downloaded to `./pretrained_models/Wan2.1/` on first run.
