@@ -1,0 +1,11 @@
+torch>=2.0
+torchvision
+matplotlib
+einops
+numpy
+Pillow
+tqdm
+ipykernel
+imageio
+imageio-ffmpeg
+pyyaml

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Data and outputs
+/data/
+outputs/*.pt
+outputs/*.gif
+outputs/*.mp4
+
+# Environment
+.conda_envs/
+.venv/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
