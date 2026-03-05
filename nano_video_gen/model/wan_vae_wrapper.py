@@ -8,7 +8,7 @@ and 4x temporal compression.
 This wrapper:
 - Auto-downloads VAE weights from Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 - Keeps the VAE on CPU (frozen, eval mode) to save GPU VRAM
-- Provides the same encode()/decode() API as DummyVAE
+- Provides encode()/decode() with per-channel normalization (latents_mean/latents_std)
 - Handles CPU<->GPU device transfers transparently
 
 Compression: [B, 3, 17, 128, 128] -> encode -> [B, 16, 5, 16, 16] -> decode -> [B, 3, 17, 128, 128]
@@ -44,6 +44,9 @@ class WanVAEWrapper(nn.Module):
     moved to CPU for encoding/decoding, then results are moved back to
     the original device.
 
+    Normalization uses per-channel latents_mean and latents_std from the
+    VAE config (not a single scaling_factor like standard AutoencoderKL).
+
     Args:
         model_path: Directory containing (or to download to) the pretrained weights.
                     Defaults to ./pretrained_models/Wan2.1
@@ -63,11 +66,15 @@ class WanVAEWrapper(nn.Module):
         for param in self.vae.parameters():
             param.requires_grad = False
 
-        self.scaling_factor = self.vae.config.scaling_factor
+        # Per-channel normalization (shape: [1, z_dim, 1, 1, 1])
+        mean = torch.tensor(self.vae.config.latents_mean).view(1, -1, 1, 1, 1)
+        std = torch.tensor(self.vae.config.latents_std).view(1, -1, 1, 1, 1)
+        self.register_buffer("latents_mean", mean)
+        self.register_buffer("latents_std", std)
 
     @property
     def latent_channels(self):
-        return self.vae.config.latent_channels
+        return self.vae.config.z_dim
 
     @torch.no_grad()
     def encode(self, x):
@@ -84,7 +91,8 @@ class WanVAEWrapper(nn.Module):
         input_device = x.device
         x_cpu = x.to(self.device, dtype=torch.float32)
         latent = self.vae.encode(x_cpu).latent_dist.mode()
-        latent = latent * self.scaling_factor
+        # Per-channel normalization: (latent - mean) * (1/std)
+        latent = (latent - self.latents_mean.to(latent.device)) / self.latents_std.to(latent.device)
         return latent.to(input_device)
 
     @torch.no_grad()
@@ -101,6 +109,7 @@ class WanVAEWrapper(nn.Module):
         """
         input_device = z.device
         z_cpu = z.to(self.device, dtype=torch.float32)
-        z_cpu = z_cpu / self.scaling_factor
+        # De-normalize: latent * std + mean
+        z_cpu = z_cpu * self.latents_std.to(z_cpu.device) + self.latents_mean.to(z_cpu.device)
         video = self.vae.decode(z_cpu).sample
         return video.clamp(-1, 1).to(input_device)
