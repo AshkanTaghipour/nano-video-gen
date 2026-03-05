@@ -25,9 +25,21 @@ git lfs install
 echo "Cloning dataset to ${DATA_DIR} (~27 MB)..."
 git clone https://www.modelscope.cn/datasets/DiffSynth-Studio/example_video_dataset.git "${DATA_DIR}"
 
+# Ensure LFS files are fully pulled
+echo "Pulling LFS files..."
+cd "${DATA_DIR}" && git lfs pull && cd -
+
+# Validate: count real video files (not LFS pointers)
+VIDEO_COUNT=$(find "${DATA_DIR}" -name "*.mp4" ! -path '*/.git/*' -size +1k | wc -l)
 echo ""
 echo "=== Download Complete ==="
 echo "Dataset saved to: ${DATA_DIR}"
+echo "Valid video files: ${VIDEO_COUNT}"
 echo ""
-echo "If this fails, you can generate synthetic data instead:"
-echo "  python -m nano_video_gen.data.generate_synthetic"
+
+if [ "${VIDEO_COUNT}" -eq 0 ]; then
+    echo "WARNING: No video files downloaded. LFS pull may have failed."
+    echo "You can generate synthetic data instead:"
+    echo "  python -m nano_video_gen.data.generate_synthetic"
+    exit 1
+fi

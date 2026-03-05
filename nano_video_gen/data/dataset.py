@@ -12,6 +12,7 @@ Reference: DiffSynth-Studio/diffsynth/core/data/unified_dataset.py
 
 import os
 import csv
+import glob
 import torch
 import numpy as np
 from torch.utils.data import Dataset
@@ -20,17 +21,27 @@ from PIL import Image
 import imageio
 
 
+def _is_valid_video(path):
+    """Check that a file exists and is a real video (not a git-lfs pointer)."""
+    if not os.path.exists(path):
+        return False
+    if os.path.getsize(path) < 1024:
+        return False
+    return True
+
+
 class VideoDataset(Dataset):
     """
     Video dataset that loads MP4 files and their text prompts.
 
     Expected directory structure:
         base_path/
-        ├── metadata.csv       # columns: video, prompt
-        └── videos/
-            ├── video1.mp4
-            ├── video2.mp4
-            └── ...
+        ├── metadata.csv       # columns: video, prompt (or text)
+        └── *.mp4 / subdir/*.mp4
+
+    Scans all metadata*.csv and ltx2*.csv files to find video/prompt pairs.
+    Falls back to scanning for mp4 files if no metadata CSVs are found.
+    Uses encoding='utf-8-sig' to handle UTF-8 BOM in CSV files.
 
     Each item returns:
         {
@@ -54,35 +65,69 @@ class VideoDataset(Dataset):
         self.width = width
         self.num_frames = num_frames
 
-        # Load metadata
-        if metadata_path is None:
-            metadata_path = os.path.join(base_path, "metadata.csv")
-
         self.videos = []
         self.prompts = []
 
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    video_path = row.get('video', row.get('file_name', ''))
-                    prompt = row.get('prompt', row.get('text', ''))
-                    if video_path:
-                        full_path = os.path.join(base_path, video_path)
-                        if os.path.exists(full_path):
-                            self.videos.append(full_path)
-                            self.prompts.append(prompt)
+        if metadata_path is not None:
+            # Single metadata file specified
+            self._load_metadata_csv(metadata_path)
         else:
-            # Fallback: find all mp4 files
-            for fname in sorted(os.listdir(base_path)):
-                if fname.endswith('.mp4'):
-                    self.videos.append(os.path.join(base_path, fname))
-                    self.prompts.append("")
+            # Scan all metadata CSVs in the directory
+            csv_patterns = [
+                os.path.join(base_path, "metadata*.csv"),
+                os.path.join(base_path, "ltx2*.csv"),
+            ]
+            csv_files = []
+            for pattern in csv_patterns:
+                csv_files.extend(sorted(glob.glob(pattern)))
+
+            if csv_files:
+                seen = set()
+                for csv_file in csv_files:
+                    self._load_metadata_csv(csv_file, seen=seen)
+            else:
+                # Fallback: find all mp4 files recursively
+                for root, _, files in os.walk(base_path):
+                    for fname in sorted(files):
+                        if fname.endswith('.mp4'):
+                            full_path = os.path.join(root, fname)
+                            if _is_valid_video(full_path):
+                                self.videos.append(full_path)
+                                self.prompts.append("")
 
         # Build prompt-to-index mapping for simple text embeddings
         unique_prompts = sorted(set(self.prompts))
         self.prompt_to_idx = {p: i for i, p in enumerate(unique_prompts)}
         self.num_prompts = len(unique_prompts)
+
+    def _load_metadata_csv(self, csv_path, seen=None):
+        """Load video/prompt pairs from a single metadata CSV file."""
+        if not os.path.exists(csv_path):
+            return
+        if seen is None:
+            seen = set()
+        # Derive a subdirectory hint from the CSV filename
+        # e.g. "ltx2_t2v.csv" -> try "ltx2/" subdirectory
+        csv_name = os.path.splitext(os.path.basename(csv_path))[0]
+        subdir_hint = csv_name.split('_')[0] if '_' in csv_name else None
+
+        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                video_path = row.get('video', row.get('file_name', ''))
+                prompt = row.get('prompt', row.get('text', ''))
+                if not video_path:
+                    continue
+                # Try base_path/video_path first, then base_path/subdir/video_path
+                full_path = os.path.join(self.base_path, video_path)
+                if not _is_valid_video(full_path) and subdir_hint:
+                    full_path = os.path.join(self.base_path, subdir_hint, video_path)
+                if full_path in seen:
+                    continue
+                if _is_valid_video(full_path):
+                    self.videos.append(full_path)
+                    self.prompts.append(prompt if prompt else '')
+                    seen.add(full_path)
 
     def __len__(self):
         return len(self.videos)
