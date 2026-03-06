@@ -79,12 +79,13 @@ def visualize_rope_frequencies(
     fig, axes = plt.subplots(1, 3, figsize=figsize)
 
     for i, (freq, label) in enumerate(zip(freqs, labels)):
-        freq_np = freq[:max_pos].abs().cpu().float().numpy()
+        # Extract rotation angles (not magnitude, which is always 1 for unit complex numbers)
+        freq_np = freq[:max_pos].angle().cpu().float().numpy()
         im = axes[i].imshow(freq_np, cmap='plasma', aspect='auto')
         axes[i].set_title(f'RoPE: {label}')
-        axes[i].set_xlabel('Frequency dimension')
+        axes[i].set_xlabel('Frequency pair index')
         axes[i].set_ylabel('Position')
-        plt.colorbar(im, ax=axes[i], fraction=0.046, pad=0.04)
+        plt.colorbar(im, ax=axes[i], fraction=0.046, pad=0.04, label='Angle (rad)')
 
     fig.suptitle('3D Rotary Position Embeddings', fontsize=14)
     plt.tight_layout()
